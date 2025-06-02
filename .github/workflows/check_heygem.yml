@@ -7,6 +7,8 @@ on:
 
 env:
   IMAGE_NAME: guiji2025/heygem.ai
+  IMAGE_TAG: latest
+  REGISTRY: https://index.docker.io/v2
 
 jobs:
   sync-image:
@@ -14,41 +16,48 @@ jobs:
     environment: actions 
 
     steps:
-      - name: Checkout repo with LFS
-        uses: actions/checkout@v4
-      #   with:
-      #     lfs: true
+      - name: Get remote image digest
+        id: remote_digest
+        run: |
+          IMAGE_NAME_ENCODED=$(echo "${{ env.IMAGE_NAME }}" | sed 's|/|%2F|g')
+          TOKEN=$(curl -s "https://auth.docker.io/token?service=registry.docker.io&scope=repository:${{ env.IMAGE_NAME }}:pull" | jq -r .token)
+          DIGEST=$(curl -sI -H "Authorization: Bearer $TOKEN" \
+            -H "Accept: application/vnd.docker.distribution.manifest.v2+json" \
+            "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/manifests/${{ env.IMAGE_TAG }}" \
+            | grep -i Docker-Content-Digest | awk '{print $2}' | tr -d $'\r')
+          echo "digest=$DIGEST" >> $GITHUB_OUTPUT
 
-      # - name: Install Git LFS
-      #   run: git lfs install
+      - name: Load last digest
+        id: load_digest
+        run: |
+          echo "last_digest=$(cat digest.txt 2>/dev/null || echo 'none')" >> $GITHUB_OUTPUT
+
+      - name: Compare digests
+        id: compare
+        run: |
+          echo "remote: ${{ steps.remote_digest.outputs.digest }}"
+          echo "last: ${{ steps.load_digest.outputs.last_digest }}"
+          if [ "${{ steps.remote_digest.outputs.digest }}" = "${{ steps.load_digest.outputs.last_digest }}" ]; then
+            echo "No update. Skipping."
+            echo "updated=false" >> $GITHUB_OUTPUT
+          else
+            echo "New image detected."
+            echo "updated=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Stop if no update
+        if: steps.compare.outputs.updated == 'false'
+        run: exit 0
 
       - name: Pull Docker image and get digest
         run: |
-          docker pull $IMAGE_NAME:latest > docker_pull.log
-          digest=$(grep "Digest:" docker_pull.log | awk '{print $2}')
-          echo "digest=$digest" >> $GITHUB_ENV
-
-      - name: Check for digest change
-        id: check
-        run: |
-          DIGEST_FILE=".last_digest"
-          if [ -f "$DIGEST_FILE" ] && grep -q "${{ env.digest }}" "$DIGEST_FILE"; then
-            echo "changed=false" >> $GITHUB_OUTPUT
-            exit 0
-          else
-            echo "${{ env.digest }}" > "$DIGEST_FILE"
-            echo "changed=true" >> $GITHUB_OUTPUT
-          fi
+          docker pull $IMAGE_NAME:$IMAGE_TAG
 
       - name: Extract /code from Docker image
-        if: steps.check.outputs.changed == 'true'
         run: |
-          container_id=$(docker create --entrypoint /bin/sh $IMAGE_NAME:latest)
+          container_id=$(docker create --entrypoint /bin/sh $IMAGE_NAME:$IMAGE_TAG)
           docker cp "$container_id":/code ./extracted_code
           docker rm "$container_id"
-
-      - name: Package code as tar.gz
-        run: |
           tar -czf heygem.tar.gz extracted_code
 
       - name: Upload as GitHub Release asset
@@ -60,37 +69,34 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Push code with LFS to GitHub
-        if: steps.check.outputs.changed == 'true'
+      - name: Save current digest
         run: |
-          # rm -rf code && mv extracted_code/code code
-          # git lfs track "*.onnx" "*.pth" "*.pt" "*.so" || true
-          echo "${{ env.digest }}" > .last_digest
-          git add .gitattributes .last_digest
-          git config user.name github-actions
-          git config user.email github-actions@users.noreply.github.com
-          git commit -m "Update code from image @ digest ${{ env.digest }}" || echo "No changes"
-          git push origin HEAD || echo "Push skipped"
+          echo "${{ steps.remote_digest.outputs.digest }}" > digest.txt
+
+      - name: Cache digest
+        uses: actions/cache@v4
+        with:
+          path: digest.txt
+          key: docker-digest-${{ steps.remote_digest.outputs.digest }}
+          restore-keys: |
+            docker-digest-
 
       - name: Login to Aliyun Docker Registry
-        if: steps.check.outputs.changed == 'true'
         run: |
           echo "${{ secrets.ALIYUN_PASSWORD }}" | docker login registry.cn-hangzhou.aliyuncs.com \
             --username "${{ secrets.ALIYUN_USERNAME }}" --password-stdin
 
       - name: Tag and Push image to Aliyun
-        if: steps.check.outputs.changed == 'true'
         run: |
           DATE=$(date +%Y%m%d)
           TARGET_TAG="registry.cn-hangzhou.aliyuncs.com/wangshaojie/heyg-gem:$DATE"
-          docker tag $IMAGE_NAME:latest "$TARGET_TAG"
+          docker tag $IMAGE_NAME:$IMAGE_TAG "$TARGET_TAG"
           docker push "$TARGET_TAG"
           echo "tagged_image=$TARGET_TAG" >> $GITHUB_ENV
 
       - name: Send WeChat Notification
-        if: steps.check.outputs.changed == 'true'
         run: |
-          MSG="✅ 镜像已更新\n\n🔹 源镜像: $IMAGE_NAME:latest\n📁 代码已推送 GitHub（含 LFS）\n📦 镜像已推送至: ${{ env.tagged_image }}"
+          MSG="✅ 镜像已更新\n\n🔹 源镜像: $IMAGE_NAME:$IMAGE_TAG\n📁 代码已推送 GitHub（含 LFS）\n📦 镜像已推送至: ${{ env.tagged_image }}"
           curl -s -X POST "${{ secrets.WECHAT_WEBHOOK }}" \
             -H 'Content-Type: application/json' \
             -d '{
