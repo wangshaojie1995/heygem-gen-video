@@ -61,13 +61,13 @@ jobs:
           tar -czf heygem.tar.gz extracted_code
       - name: Generate timestamp
         id: gen_tag
-        run: echo "tag=heygem-gen-video-$(date +'%Y%m%d%')" >> "$GITHUB_OUTPUT"
+        run: echo "tag=$(date +'%Y%m%d')" >> "$GITHUB_OUTPUT"
 
       - name: Upload as GitHub Release asset
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.gen_tag.outputs.tag }}
-          name: "Code package ${{ steps.gen_tag.outputs.tag }}"
+          name: "${{ steps.gen_tag.outputs.tag }}"
           files: heygem.tar.gz
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -99,7 +99,7 @@ jobs:
 
       - name: Send WeChat Notification
         run: |
-          MSG="✅ 镜像已更新\n\n🔹 源镜像: $IMAGE_NAME:$IMAGE_TAG\n📁 代码已推送 GitHub（含 LFS）\n📦 镜像已推送至: ${{ env.tagged_image }}"
+          MSG="✅ 镜像已更新\n\n🔹 源镜像: $IMAGE_NAME:$IMAGE_TAG\n📁 Release已发布\n📦 镜像已推送至: ${{ env.tagged_image }}"
           curl -s -X POST "${{ secrets.WECHAT_WEBHOOK }}" \
             -H 'Content-Type: application/json' \
             -d '{
