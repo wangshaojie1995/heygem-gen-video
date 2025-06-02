@@ -59,12 +59,15 @@ jobs:
           docker cp "$container_id":/code ./extracted_code
           docker rm "$container_id"
           tar -czf heygem.tar.gz extracted_code
+      - name: Generate timestamp
+        id: gen_tag
+        run: echo "tag=heygem-gen-video-$(date +'%Y%m%d%')" >> "$GITHUB_OUTPUT"
 
       - name: Upload as GitHub Release asset
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: heygem-gen-video-$(date +'%Y%m%d%H%M')
-          name: "Code package $(date +'%Y-%m-%d %H:%M')"
+          tag_name: ${{ steps.gen_tag.outputs.tag }}
+          name: "Code package ${{ steps.gen_tag.outputs.tag }}"
           files: heygem.tar.gz
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
