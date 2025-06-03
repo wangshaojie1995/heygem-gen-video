@@ -32,6 +32,8 @@ heygem-gen-video 是一个基于 Python 的数字人项目，它从 [HeyGem.ai](
 * 紧包含数字人合成，不包含声音克隆和文字转语音
 * 紧随Heygem官方更新
 
+[云端部署](https://www.xiangongyun.com/register/G3F36A)
+
 微信群  
 ![](https://github.com/wangshaojie1995/heygem-gen-video-5090/blob/main/contact_qr.png)
 
