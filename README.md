@@ -3,7 +3,6 @@
 ![Python](https://img.shields.io/badge/Python-3.8-blue.svg)
 ![Linux](https://img.shields.io/badge/OS-Linux-brightgreen.svg)
 
-**[中文](#chinese-version)** | **[English](README_en.md)**  
 
 ---
 
