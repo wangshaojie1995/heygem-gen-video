@@ -26,7 +26,12 @@ jobs:
             "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/manifests/${{ env.IMAGE_TAG }}" \
             | grep -i Docker-Content-Digest | awk '{print $2}' | tr -d $'\r')
           echo "digest=$DIGEST" >> $GITHUB_OUTPUT
-
+      - name: Restore digest cache
+        uses: actions/cache@v4
+        with:
+          path: digest.txt
+          key: docker-digest
+          
       - name: Load last digest
         id: load_digest
         run: |
