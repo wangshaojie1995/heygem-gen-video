@@ -50,25 +50,25 @@ jobs:
             echo "updated=true" >> $GITHUB_OUTPUT
           fi
 
-      - name: Stop if no update
-        if: steps.compare.outputs.updated == 'false'
-        run: exit 0
-
       - name: Pull Docker image and get digest
+        if: steps.compare.outputs.updated == 'true'
         run: |
           docker pull $IMAGE_NAME:$IMAGE_TAG
 
       - name: Extract /code from Docker image
+        if: steps.compare.outputs.updated == 'true'
         run: |
           container_id=$(docker create --entrypoint /bin/sh $IMAGE_NAME:$IMAGE_TAG)
           docker cp "$container_id":/code ./extracted_code
           docker rm "$container_id"
           tar -czf heygem.tar.gz extracted_code
       - name: Generate timestamp
+        if: steps.compare.outputs.updated == 'true'
         id: gen_tag
         run: echo "tag=$(date +'%Y%m%d')" >> "$GITHUB_OUTPUT"
 
       - name: Upload as GitHub Release asset
+        if: steps.compare.outputs.updated == 'true'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.gen_tag.outputs.tag }}
@@ -78,10 +78,12 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Save current digest
+        if: steps.compare.outputs.updated == 'true'
         run: |
           echo "${{ steps.remote_digest.outputs.digest }}" > digest.txt
 
       - name: Cache digest
+        if: steps.compare.outputs.updated == 'true'
         uses: actions/cache@v4
         with:
           path: digest.txt
@@ -90,11 +92,13 @@ jobs:
             docker-digest-
 
       - name: Login to Aliyun Docker Registry
+        if: steps.compare.outputs.updated == 'true'
         run: |
           echo "${{ secrets.ALIYUN_PASSWORD }}" | docker login registry.cn-hangzhou.aliyuncs.com \
             --username "${{ secrets.ALIYUN_USERNAME }}" --password-stdin
 
       - name: Tag and Push image to Aliyun
+        if: steps.compare.outputs.updated == 'true'
         run: |
           DATE=$(date +%Y%m%d)
           TARGET_TAG="registry.cn-hangzhou.aliyuncs.com/wangshaojie/heyg-gem:$DATE"
@@ -103,6 +107,7 @@ jobs:
           echo "tagged_image=$TARGET_TAG" >> $GITHUB_ENV
 
       - name: Send WeChat Notification
+        if: steps.compare.outputs.updated == 'true'
         run: |
           MSG="✅ 镜像已更新\n\n🔹 源镜像: $IMAGE_NAME:$IMAGE_TAG\n📁 Release已发布\n📦 镜像已推送至: ${{ env.tagged_image }}"
           curl -s -X POST "${{ secrets.WECHAT_WEBHOOK }}" \
